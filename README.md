@@ -1,9 +1,13 @@
 # Checkout-backend
 
 Installation 
-```make start```
+```
+make start
+```
 
 Stop App
-```make stop```
+```
+make stop
+```
 
 API
