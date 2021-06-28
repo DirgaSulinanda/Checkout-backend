@@ -175,31 +175,33 @@ func applyPromo(ctx context.Context, data m.CheckoutOutput, promo map[int]tmpPro
 	// apply discount to every active promo
 	for promoID, actPromo := range activePromo {
 		// only apply discount for conditions met products
-		if actPromo.conditionsMet >= actPromo.conditionsShouldMet {
-			currentPromo, found := promo[promoID]
+		if actPromo.conditionsMet < actPromo.conditionsShouldMet {
+			continue
+		}
+
+		currentPromo, found := promo[promoID]
+		if !found {
+			continue
+		}
+
+		// check every product data for discounted product
+		for i, product := range data.Products {
+			discountQty, found := currentPromo.discount[product.SKU]
 			if !found {
 				continue
 			}
 
-			// check every product data for discounted product
-			for i, product := range data.Products {
-				discountQty, found := currentPromo.discount[product.SKU]
-				if !found {
-					continue
-				}
-
-				qty, multiplier, errParse := parseDiscountQtyAndMultiplier(discountQty, product.Quantity)
-				if errParse != nil {
-					continue
-				}
-
-				discount := countDiscount(product, qty, multiplier)
-				totalDiscount += discount
-
-				product.Promos = append(product.Promos, currentPromo.name)
-				product.TotalPrice = product.OriginalPrice - discount
-				data.Products[i] = product
+			qty, multiplier, errParse := parseDiscountQtyAndMultiplier(discountQty, product.Quantity)
+			if errParse != nil {
+				continue
 			}
+
+			discount := countDiscount(product, qty, multiplier)
+			totalDiscount += discount
+
+			product.Promos = append(product.Promos, currentPromo.name)
+			product.TotalPrice = product.OriginalPrice - discount
+			data.Products[i] = product
 		}
 	}
 
@@ -210,26 +212,31 @@ func applyPromo(ctx context.Context, data m.CheckoutOutput, promo map[int]tmpPro
 func checkEveryEligiblePromo(promoIDs []int, promo map[int]tmpPromo, product m.Product, activePromo map[int]activePromoStruct) {
 	for _, promoID := range promoIDs {
 		// check for promo id
-		if prm, found := promo[promoID]; found {
-			// get minQty
-			minQty := prm.condition[product.SKU]
-			checkPassPromoCondition(prm, product.Quantity, minQty, activePromo)
+		prm, found := promo[promoID]
+		if !found {
+			return
 		}
+		// get minQty
+		minQty := prm.condition[product.SKU]
+		checkPassPromoCondition(prm, product.Quantity, minQty, activePromo)
 	}
 }
 
 func checkPassPromoCondition(promo tmpPromo, transactionQty, promoMinQty int, activePromo map[int]activePromoStruct) {
 	// check on min qty condition
-	if transactionQty >= promoMinQty {
-		// check if promo already exists
-		if actPromo, exists := activePromo[promo.id]; exists {
-			actPromo.conditionsMet++
-		} else {
-			activePromo[promo.id] = activePromoStruct{
-				conditionsMet:       1,
-				conditionsShouldMet: len(promo.condition),
-			}
-		}
+	if transactionQty < promoMinQty {
+		return
+	}
+
+	// check if promo already exists
+	if actPromo, exists := activePromo[promo.id]; exists {
+		actPromo.conditionsMet++
+		return
+	}
+
+	activePromo[promo.id] = activePromoStruct{
+		conditionsMet:       1,
+		conditionsShouldMet: len(promo.condition),
 	}
 }
 
@@ -243,14 +250,16 @@ func parseDiscountQtyAndMultiplier(discountQty string, productQuantity int) (qty
 			return
 		}
 		multiplier = productQuantity
-	} else {
-		// regular discount
-		qty, err = strconv.ParseFloat(discountQty, 64)
-		if err != nil {
-			return
-		}
-		multiplier = 1
+		return
 	}
+
+	// regular discount
+	qty, err = strconv.ParseFloat(discountQty, 64)
+	if err != nil {
+		return
+	}
+	multiplier = 1
+
 	return
 }
 
