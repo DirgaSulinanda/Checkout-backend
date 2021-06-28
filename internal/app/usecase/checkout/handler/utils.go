@@ -223,7 +223,7 @@ func checkPassPromoCondition(promo tmpPromo, transactionQty, promoMinQty int, ac
 	if transactionQty >= promoMinQty {
 		// check if promo already exists
 		if actPromo, exists := activePromo[promo.id]; exists {
-			actPromo.conditionsShouldMet++
+			actPromo.conditionsMet++
 		} else {
 			activePromo[promo.id] = activePromoStruct{
 				conditionsMet:       1,
